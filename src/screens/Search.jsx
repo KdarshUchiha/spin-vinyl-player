@@ -3,6 +3,7 @@ import { Search as SearchIcon, X } from 'lucide-react'
 import { searchAll } from '../api/music'
 import TrackRow from '../components/TrackRow'
 import SourceFilter from '../components/SourceFilter'
+import EmptyState from '../components/EmptyState'
 import { applySourceFilter, usePlayer } from '../context/PlayerContext'
 
 const SUGGESTIONS = ['The Weeknd', 'Tame Impala', 'lofi study', 'Bad Bunny', 'Dua Lipa', 'house mix', 'Adele']
@@ -65,15 +66,18 @@ export default function Search({ onAdd }) {
       </div>
 
       {!q && (
-        <div className="search-empty">
-          <h2>Search across two free sources</h2>
-          <p>iTunes (30-second previews of mainstream music) and Audius (full-length independent tracks). Pick your preference with the filter above.</p>
-          <div className="suggestion-row">
-            {SUGGESTIONS.map((s) => (
-              <button key={s} className="chip" onClick={() => setQ(s)}>{s}</button>
-            ))}
-          </div>
-        </div>
+        <EmptyState
+          icon="search"
+          title="Search across two free sources"
+          message="iTunes for 30-second previews of mainstream music, Audius for full-length independent tracks. Pick your preference with the filter above."
+          action={
+            <div className="suggestion-row">
+              {SUGGESTIONS.map((s) => (
+                <button key={s} className="chip" onClick={() => setQ(s)}>{s}</button>
+              ))}
+            </div>
+          }
+        />
       )}
     </div>
   )

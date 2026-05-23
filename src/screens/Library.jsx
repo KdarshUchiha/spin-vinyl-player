@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Clock, Heart, ListMusic, Plus, Trash2, TrendingUp, X } from 'lucide-react'
 import { usePlayer } from '../context/PlayerContext'
 import TrackRow from '../components/TrackRow'
+import EmptyState from '../components/EmptyState'
 
 export default function Library() {
   const {
@@ -82,17 +83,31 @@ export default function Library() {
       </div>
 
       {tab === 'favorites' && (
-        <div className="track-list">
-          {favorites.map((t, i) => <TrackRow key={t.id} track={t} list={favorites} index={i} />)}
-          {favorites.length === 0 && <div className="muted">Tap the heart on any track to save it here.</div>}
-        </div>
+        favorites.length === 0 ? (
+          <EmptyState
+            icon="favorites"
+            title="No favorites yet"
+            message="Tap the heart on any track to save it here for one-tap access."
+          />
+        ) : (
+          <div className="track-list">
+            {favorites.map((t, i) => <TrackRow key={t.id} track={t} list={favorites} index={i} />)}
+          </div>
+        )
       )}
 
       {tab === 'recent' && (
-        <div className="track-list">
-          {recent.map((t, i) => <TrackRow key={`${t.id}-r-${i}`} track={t} list={recent} index={i} />)}
-          {recent.length === 0 && <div className="muted">Play some songs and they'll show up here.</div>}
-        </div>
+        recent.length === 0 ? (
+          <EmptyState
+            icon="recent"
+            title="Nothing played yet"
+            message="Songs you play will show up here, newest first."
+          />
+        ) : (
+          <div className="track-list">
+            {recent.map((t, i) => <TrackRow key={`${t.id}-r-${i}`} track={t} list={recent} index={i} />)}
+          </div>
+        )
       )}
 
       {tab === 'playlists' && (
