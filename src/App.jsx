@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Home as HomeIcon, Library, Search as SearchIcon, X } from 'lucide-react'
+import { Home as HomeIcon, Info, Library, Search as SearchIcon, X } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { PlayerProvider, usePlayer } from './context/PlayerContext'
 import { useArtworkPalette } from './hooks/useArtworkPalette'
 import { useMediaSession } from './hooks/useMediaSession'
 import { useHotkeys } from './hooks/useHotkeys'
 import { ToastProvider } from './components/Toast'
+import OnboardingTour from './components/OnboardingTour'
 import Home from './screens/Home'
 import Search from './screens/Search'
 import LibraryScreen from './screens/Library'
+import About from './screens/About'
 import NowPlaying from './screens/NowPlaying'
 import MiniPlayer from './components/MiniPlayer'
 import './app.css'
@@ -68,9 +70,10 @@ function Shell() {
           <NavBtn icon={<HomeIcon size={20} />} active={route === 'home'} onClick={() => setRoute('home')}>Home</NavBtn>
           <NavBtn icon={<SearchIcon size={20} />} active={route === 'search'} onClick={() => setRoute('search')}>Search</NavBtn>
           <NavBtn icon={<Library size={20} />} active={route === 'library'} onClick={() => setRoute('library')}>Library</NavBtn>
+          <NavBtn icon={<Info size={20} />} active={route === 'about'} onClick={() => setRoute('about')}>About</NavBtn>
         </nav>
         <div className="sidebar-footer">
-          <small>Press <kbd>?</kbd> for shortcuts</small>
+          <small>Built by <a href="https://github.com/KdarshUchiha" target="_blank" rel="noopener noreferrer">@KdarshUchiha</a></small>
         </div>
       </aside>
 
@@ -86,6 +89,7 @@ function Shell() {
             {route === 'home' && <Home />}
             {route === 'search' && <Search onAdd={(t) => setAddingTrack(t)} />}
             {route === 'library' && <LibraryScreen />}
+            {route === 'about' && <About />}
           </motion.div>
         </AnimatePresence>
       </main>
@@ -111,7 +115,10 @@ function Shell() {
         <BottomBtn icon={<HomeIcon size={22} />} active={route === 'home'} onClick={() => setRoute('home')}>Home</BottomBtn>
         <BottomBtn icon={<SearchIcon size={22} />} active={route === 'search'} onClick={() => setRoute('search')}>Search</BottomBtn>
         <BottomBtn icon={<Library size={22} />} active={route === 'library'} onClick={() => setRoute('library')}>Library</BottomBtn>
+        <BottomBtn icon={<Info size={22} />} active={route === 'about'} onClick={() => setRoute('about')}>About</BottomBtn>
       </nav>
+
+      <OnboardingTour />
 
       {addingTrack && (
         <div className="modal-bg" onClick={() => setAddingTrack(null)}>
