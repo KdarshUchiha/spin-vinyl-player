@@ -36,7 +36,7 @@ export default function TrackRow({ track, list, index, onAdd }) {
         <div className="track-row-sub">{track.artist}{track.album ? ` · ${track.album}` : ''}</div>
       </div>
       <div className={`track-row-source track-row-source--${track.source}`}>
-        {track.source === 'audius' ? 'FULL' : '0:30'}
+        {track.source === 'audius' ? 'FULL' : track.source === 'youtube' ? 'YT' : '0:30'}
       </div>
       <button className="icon-btn" onClick={handleQueue} aria-label="Add to queue" title="Add to queue">
         <ListPlus size={18} />

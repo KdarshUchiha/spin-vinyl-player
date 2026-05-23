@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback } from 'react'
+import { createYTPlayer, ytPause, ytPlay, ytResume, ytSeekTo, ytSetRate, ytSetVolume, ytStop } from '../api/yt-player'
 
 const PlayerContext = createContext(null)
 
@@ -30,6 +31,8 @@ function loadJSON(key, fallback) {
   }
 }
 
+const isYT = (t) => t?.source === 'youtube'
+
 export function PlayerProvider({ children }) {
   const audioRef = useRef(null)
   const audioCtxRef = useRef(null)
@@ -37,6 +40,8 @@ export function PlayerProvider({ children }) {
   const analyserRef = useRef(null)
   const filtersRef = useRef([])
   const corsFailedRef = useRef(new Set())
+  const ytReadyRef = useRef(false)
+  const ytStateRef = useRef(-1)
 
   if (!audioRef.current && typeof Audio !== 'undefined') {
     audioRef.current = new Audio()
@@ -62,6 +67,7 @@ export function PlayerProvider({ children }) {
   const [sleepEndsAt, setSleepEndsAt] = useState(null)
   const [eqPreset, setEqPreset] = useState(() => loadJSON(STORAGE_KEYS.eq, 'off'))
   const [analyserReady, setAnalyserReady] = useState(false)
+  const [ytVisible, setYtVisible] = useState(false)
 
   // persist
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.favorites, JSON.stringify(favorites)) }, [favorites])
@@ -74,6 +80,7 @@ export function PlayerProvider({ children }) {
 
   useEffect(() => {
     if (audioRef.current) audioRef.current.playbackRate = speed
+    ytSetRate(speed)
   }, [speed])
 
   const ensureAudioGraph = useCallback(() => {
@@ -94,7 +101,6 @@ export function PlayerProvider({ children }) {
       const analyser = ctx.createAnalyser()
       analyser.fftSize = 128
       analyser.smoothingTimeConstant = 0.78
-      // chain: src → filters → analyser → destination
       let node = src
       filters.forEach((f) => { node.connect(f); node = f })
       node.connect(analyser)
@@ -110,7 +116,27 @@ export function PlayerProvider({ children }) {
     }
   }, [])
 
-  // apply EQ when preset changes or graph is created
+  const ensureYTPlayer = useCallback(async () => {
+    if (ytReadyRef.current) return
+    await createYTPlayer({
+      onReady: () => { ytReadyRef.current = true; ytSetVolume(volume); ytSetRate(speed) },
+      onState: (state) => {
+        ytStateRef.current = state
+        if (state === 1) setIsPlaying(true)        // playing
+        else if (state === 2) setIsPlaying(false)  // paused
+        else if (state === 0) {                    // ended
+          setIsPlaying(false)
+          handleEndedRef.current?.()
+        }
+      },
+      onTime: (t, d) => {
+        setProgress(t)
+        if (d) setDuration(d)
+      },
+    })
+  }, [volume, speed])
+
+  // EQ
   useEffect(() => {
     const filters = filtersRef.current
     const gains = EQ_PRESETS[eqPreset] || EQ_PRESETS.off
@@ -128,24 +154,29 @@ export function PlayerProvider({ children }) {
   useEffect(() => {
     if (!sleepEndsAt) return
     const ms = sleepEndsAt - Date.now()
-    if (ms <= 0) { audioRef.current?.pause(); setSleepEndsAt(null); return }
-    const t = setTimeout(() => { audioRef.current?.pause(); setSleepEndsAt(null) }, ms)
+    if (ms <= 0) {
+      if (isYT(currentTrack)) ytPause(); else audioRef.current?.pause()
+      setSleepEndsAt(null); return
+    }
+    const t = setTimeout(() => {
+      if (isYT(currentTrack)) ytPause(); else audioRef.current?.pause()
+      setSleepEndsAt(null)
+    }, ms)
     return () => clearTimeout(t)
-  }, [sleepEndsAt])
+  }, [sleepEndsAt, currentTrack])
 
-  // audio element wiring
+  // <audio> wiring
   useEffect(() => {
     const audio = audioRef.current
     if (!audio) return
-    const onTime = () => setProgress(audio.currentTime)
-    const onMeta = () => setDuration(audio.duration || 0)
-    const onEnd = () => handleEnded()
-    const onPlay = () => setIsPlaying(true)
-    const onPause = () => setIsPlaying(false)
+    const onTime = () => { if (!isYT(currentTrack)) setProgress(audio.currentTime) }
+    const onMeta = () => { if (!isYT(currentTrack)) setDuration(audio.duration || 0) }
+    const onEnd = () => { if (!isYT(currentTrack)) handleEndedRef.current?.() }
+    const onPlay = () => { if (!isYT(currentTrack)) setIsPlaying(true) }
+    const onPause = () => { if (!isYT(currentTrack)) setIsPlaying(false) }
     const onError = () => {
-      // CORS or load failure — retry without crossOrigin if not yet retried
       const t = currentTrack
-      if (!t || corsFailedRef.current.has(t.preview)) return
+      if (!t || isYT(t) || corsFailedRef.current.has(t.preview)) return
       corsFailedRef.current.add(t.preview)
       audio.crossOrigin = null
       audio.src = t.preview
@@ -169,6 +200,7 @@ export function PlayerProvider({ children }) {
 
   useEffect(() => {
     if (audioRef.current) audioRef.current.volume = volume
+    ytSetVolume(volume)
   }, [volume])
 
   const bumpRecent = useCallback((track) => {
@@ -176,18 +208,30 @@ export function PlayerProvider({ children }) {
     setPlayCounts((prev) => ({ ...prev, [track.id]: (prev[track.id] || 0) + 1 }))
   }, [])
 
-  const loadAndPlay = useCallback((track) => {
-    const audio = audioRef.current
-    if (!audio || !track) return
-    // restore CORS attempt unless we already know this URL fails CORS
-    audio.crossOrigin = corsFailedRef.current.has(track.preview) ? null : 'anonymous'
-    audio.src = track.preview
-    audio.playbackRate = speed
-    ensureAudioGraph()
-    audioCtxRef.current?.resume?.()
-    audio.play().catch(() => {})
+  // forward-decl handleEnded so callbacks can call it
+  const handleEndedRef = useRef(null)
+
+  const loadAndPlay = useCallback(async (track) => {
+    if (!track) return
+    if (isYT(track)) {
+      // pause html5 audio if it was playing
+      audioRef.current?.pause()
+      await ensureYTPlayer()
+      ytPlay(track.youtubeId)
+      setProgress(0); setDuration(0)
+    } else {
+      // pause yt
+      ytStop()
+      const audio = audioRef.current
+      audio.crossOrigin = corsFailedRef.current.has(track.preview) ? null : 'anonymous'
+      audio.src = track.preview
+      audio.playbackRate = speed
+      ensureAudioGraph()
+      audioCtxRef.current?.resume?.()
+      audio.play().catch(() => {})
+    }
     bumpRecent(track)
-  }, [speed, ensureAudioGraph, bumpRecent])
+  }, [speed, ensureAudioGraph, ensureYTPlayer, bumpRecent])
 
   const playTrack = useCallback((track, list = null) => {
     if (!track) return
@@ -203,19 +247,29 @@ export function PlayerProvider({ children }) {
   }, [loadAndPlay])
 
   const togglePlay = useCallback(() => {
-    const audio = audioRef.current
-    if (!audio || !currentTrack) return
-    audioCtxRef.current?.resume?.()
-    if (audio.paused) audio.play().catch(() => {})
-    else audio.pause()
+    if (!currentTrack) return
+    if (isYT(currentTrack)) {
+      if (ytStateRef.current === 1) ytPause(); else ytResume()
+    } else {
+      const audio = audioRef.current
+      if (!audio) return
+      audioCtxRef.current?.resume?.()
+      if (audio.paused) audio.play().catch(() => {})
+      else audio.pause()
+    }
   }, [currentTrack])
 
   const seek = useCallback((seconds) => {
-    const audio = audioRef.current
-    if (!audio) return
-    audio.currentTime = seconds
-    setProgress(seconds)
-  }, [])
+    if (isYT(currentTrack)) {
+      ytSeekTo(seconds)
+      setProgress(seconds)
+    } else {
+      const audio = audioRef.current
+      if (!audio) return
+      audio.currentTime = seconds
+      setProgress(seconds)
+    }
+  }, [currentTrack])
 
   const playNext = useCallback(() => {
     if (queue.length === 0) return
@@ -236,27 +290,32 @@ export function PlayerProvider({ children }) {
   }, [queue, queueIndex, shuffle, repeat, loadAndPlay])
 
   const playPrev = useCallback(() => {
-    const audio = audioRef.current
-    if (!audio) return
-    if (audio.currentTime > 3) { audio.currentTime = 0; return }
-    if (queueIndex <= 0) { audio.currentTime = 0; return }
+    if (isYT(currentTrack)) {
+      if (progress > 3) { ytSeekTo(0); return }
+    } else {
+      const audio = audioRef.current
+      if (audio && audio.currentTime > 3) { audio.currentTime = 0; return }
+    }
+    if (queueIndex <= 0) {
+      if (isYT(currentTrack)) ytSeekTo(0); else if (audioRef.current) audioRef.current.currentTime = 0
+      return
+    }
     const idx = queueIndex - 1
     const prev = queue[idx]
     setQueueIndex(idx)
     setCurrentTrack(prev)
     loadAndPlay(prev)
-  }, [queue, queueIndex, loadAndPlay])
+  }, [queue, queueIndex, currentTrack, progress, loadAndPlay])
 
   const handleEnded = useCallback(() => {
-    const audio = audioRef.current
-    if (!audio) return
     if (repeat === 'one') {
-      audio.currentTime = 0
-      audio.play().catch(() => {})
+      if (isYT(currentTrack)) { ytSeekTo(0); ytResume() }
+      else { const a = audioRef.current; if (a) { a.currentTime = 0; a.play().catch(() => {}) } }
       return
     }
     playNext()
-  }, [repeat, playNext])
+  }, [repeat, currentTrack, playNext])
+  handleEndedRef.current = handleEnded
 
   const jumpToQueueIndex = useCallback((idx) => {
     if (idx < 0 || idx >= queue.length) return
@@ -341,10 +400,17 @@ export function PlayerProvider({ children }) {
     setSleepEndsAt(Date.now() + minutes * 60 * 1000)
   }, [])
 
+  // expose YT visibility toggle for Now Playing screen
+  useEffect(() => {
+    const m = document.getElementById('yt-mount')
+    if (m) m.classList.toggle('yt-mount--visible', ytVisible && isYT(currentTrack))
+  }, [ytVisible, currentTrack])
+
   const value = useMemo(() => ({
     currentTrack, queue, queueIndex, isPlaying, progress, duration, volume,
     shuffle, repeat, speed, favorites, playlists, recent,
     sourceFilter, playCounts, sleepEndsAt, eqPreset, analyserRef, analyserReady,
+    ytVisible, setYtVisible,
     playTrack, togglePlay, seek, playNext, playPrev, jumpToQueueIndex,
     addToQueue, removeFromQueue, clearQueue, reorderQueue,
     setVolume, setShuffle, setRepeat, setSpeed, setSourceFilter, setSleepIn, setEqPreset,
@@ -354,6 +420,7 @@ export function PlayerProvider({ children }) {
     currentTrack, queue, queueIndex, isPlaying, progress, duration, volume,
     shuffle, repeat, speed, favorites, playlists, recent,
     sourceFilter, playCounts, sleepEndsAt, eqPreset, analyserReady,
+    ytVisible,
     playTrack, togglePlay, seek, playNext, playPrev, jumpToQueueIndex,
     addToQueue, removeFromQueue, clearQueue, reorderQueue,
     setSleepIn,
@@ -373,6 +440,7 @@ export function usePlayer() {
 export function applySourceFilter(tracks, filter) {
   if (filter === 'preview') return tracks.filter((t) => t.source === 'itunes')
   if (filter === 'full') return tracks.filter((t) => t.source === 'audius')
+  if (filter === 'youtube') return tracks.filter((t) => t.source === 'youtube')
   return tracks
 }
 

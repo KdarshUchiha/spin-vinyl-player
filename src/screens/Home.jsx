@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getTrendingAudius, getTrendingITunes, searchITunes, searchAudius } from '../api/music'
+import { fetchGlobalNewReleases, fetchIndianNewReleases } from '../api/youtube'
 import TrackRow from '../components/TrackRow'
 import SourceFilter from '../components/SourceFilter'
 import HeroVinyl from '../components/HeroVinyl'
@@ -15,6 +16,8 @@ const GENRES = [
   { label: 'Jazz',      query: 'jazz',              hue: 50 },
   { label: 'Classical', query: 'classical',         hue: 320 },
   { label: 'Latin',     query: 'latin',             hue: 15 },
+  { label: 'Bollywood', query: 'bollywood new song',hue: 350 },
+  { label: 'Punjabi',   query: 'punjabi new song',  hue: 25 },
   { label: 'R&B',       query: 'r&b soul',          hue: 270 },
   { label: 'Workout',   query: 'workout pump',      hue: 350 },
   { label: 'Chill',     query: 'chill ambient',     hue: 200 },
@@ -24,6 +27,8 @@ const GENRES = [
 export default function Home() {
   const [trending, setTrending] = useState([])
   const [hits, setHits] = useState([])
+  const [globalReleases, setGlobalReleases] = useState([])
+  const [indianReleases, setIndianReleases] = useState([])
   const [loading, setLoading] = useState(true)
   const [activeGenre, setActiveGenre] = useState(null)
   const [genreLoading, setGenreLoading] = useState(false)
@@ -33,10 +38,14 @@ export default function Home() {
   useEffect(() => {
     let alive = true
     setLoading(true)
-    Promise.all([getTrendingAudius(20), getTrendingITunes()]).then(([a, b]) => {
+    Promise.all([
+      getTrendingAudius(20),
+      getTrendingITunes(),
+      fetchGlobalNewReleases(20),
+      fetchIndianNewReleases(20),
+    ]).then(([a, b, g, i]) => {
       if (!alive) return
-      setTrending(a)
-      setHits(b)
+      setTrending(a); setHits(b); setGlobalReleases(g); setIndianReleases(i)
       setLoading(false)
     })
     return () => { alive = false }
@@ -67,6 +76,8 @@ export default function Home() {
   const filteredHits = useMemo(() => applySourceFilter(hits, sourceFilter), [hits, sourceFilter])
   const filteredRecent = useMemo(() => applySourceFilter(recent, sourceFilter), [recent, sourceFilter])
   const filteredGenre = useMemo(() => applySourceFilter(genreTracks, sourceFilter), [genreTracks, sourceFilter])
+  const filteredGlobal = useMemo(() => applySourceFilter(globalReleases, sourceFilter), [globalReleases, sourceFilter])
+  const filteredIndian = useMemo(() => applySourceFilter(indianReleases, sourceFilter), [indianReleases, sourceFilter])
 
   return (
     <div className="screen">
@@ -78,6 +89,24 @@ export default function Home() {
           <SourceFilter />
         </div>
       </header>
+
+      <RevealSection
+        title="🌍 New releases — Global"
+        subtitle="Live from major label YouTube channels"
+      >
+        {loading && globalReleases.length === 0 ? <Skeleton /> : (
+          <CardRow tracks={filteredGlobal} onPlay={(t) => playTrack(t, filteredGlobal)} />
+        )}
+      </RevealSection>
+
+      <RevealSection
+        title="🇮🇳 New releases — India"
+        subtitle="T-Series, Sony India, Saregama, YRF, Tips, Times, Speed and more"
+      >
+        {loading && indianReleases.length === 0 ? <Skeleton /> : (
+          <CardRow tracks={filteredIndian} onPlay={(t) => playTrack(t, filteredIndian)} />
+        )}
+      </RevealSection>
 
       <RevealSection title="Pick a vibe">
         <div className="chip-row">
@@ -150,7 +179,7 @@ function CardRow({ tracks, onPlay }) {
             {t.artwork ? <img src={t.artwork} alt="" loading="lazy" /> : <div className="card-art-fallback" />}
             <div className="card-play">▶</div>
             <span className={`card-badge card-badge--${t.source}`}>
-              {t.source === 'audius' ? 'FULL' : '0:30'}
+              {t.source === 'audius' ? 'FULL' : t.source === 'youtube' ? 'YT' : '0:30'}
             </span>
           </div>
           <div className="card-title">{t.title}</div>

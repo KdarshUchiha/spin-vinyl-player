@@ -22,7 +22,7 @@ export default function MiniPlayer({ onExpand }) {
             <div className="mini-artist">{currentTrack.artist}</div>
           </div>
           <span className={`mini-badge mini-badge--${currentTrack.source}`}>
-            {currentTrack.source === 'audius' ? 'FULL' : '0:30'}
+            {currentTrack.source === 'audius' ? 'FULL' : currentTrack.source === 'youtube' ? 'YT' : '0:30'}
           </span>
         </button>
         <div className="mini-controls">

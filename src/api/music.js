@@ -63,13 +63,16 @@ export async function searchAudius(query, limit = 25) {
 }
 
 export async function searchAll(query, offset = 0) {
-  const [a, b] = await Promise.allSettled([
+  const { searchYouTube } = await import('./youtube')
+  const [a, b, c] = await Promise.allSettled([
     searchITunes(query, 20, offset),
     offset === 0 ? searchAudius(query, 15) : Promise.resolve([]),
+    offset === 0 ? searchYouTube(query, 15) : Promise.resolve([]),
   ])
   const arr = []
   if (a.status === 'fulfilled') arr.push(...a.value)
   if (b.status === 'fulfilled') arr.push(...b.value)
+  if (c.status === 'fulfilled') arr.push(...c.value)
   return arr
 }
 

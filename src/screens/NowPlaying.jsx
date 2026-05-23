@@ -39,7 +39,7 @@ export default function NowPlaying({ onClose }) {
     togglePlay, playNext, playPrev, seek,
     volume, setVolume, shuffle, setShuffle, repeat, setRepeat,
     speed, setSpeed, sleepEndsAt, setSleepIn,
-    eqPreset, setEqPreset,
+    eqPreset, setEqPreset, setYtVisible,
     isFavorite, toggleFavorite,
   } = usePlayer()
   const toast = useToast()
@@ -56,7 +56,14 @@ export default function NowPlaying({ onClose }) {
     return () => window.removeEventListener('resize', calc)
   }, [])
 
+  // mount YT iframe visibly while NowPlaying is open and track is YouTube
+  useEffect(() => {
+    setYtVisible(true)
+    return () => setYtVisible(false)
+  }, [setYtVisible])
+
   if (!currentTrack) return null
+  const isYT = currentTrack.source === 'youtube'
 
   const cycleRepeat = () => {
     setRepeat(repeat === 'off' ? 'all' : repeat === 'all' ? 'one' : 'off')
@@ -75,7 +82,9 @@ export default function NowPlaying({ onClose }) {
           <div className="np-header-meta">
             <div className="np-eyebrow">Now playing</div>
             <div className="np-source">
-              {currentTrack.source === 'audius' ? 'Audius · full track' : 'iTunes · 30s preview'}
+              {currentTrack.source === 'audius' ? 'Audius · full track'
+                : currentTrack.source === 'youtube' ? 'YouTube · video'
+                : 'iTunes · 30s preview'}
             </div>
           </div>
           <div className="np-header-right">
@@ -111,6 +120,11 @@ export default function NowPlaying({ onClose }) {
         {view === 'vinyl' ? (
           <div className="np-vinyl-wrap">
             <Vinyl size={vinylSize} />
+            {isYT && (
+              <div className="np-yt-placeholder" aria-hidden="true">
+                <div className="np-yt-hint">▶ YouTube player visible at bottom</div>
+              </div>
+            )}
           </div>
         ) : (
           <div className="np-lyrics-wrap">
