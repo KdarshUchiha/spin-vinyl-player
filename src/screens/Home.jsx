@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getTrendingAudius, getTrendingITunes, searchITunes, searchAudius } from '../api/music'
 import { fetchGlobalNewReleases, fetchIndianNewReleases } from '../api/youtube'
+import { CATEGORIES } from '../api/yt-channels'
 import TrackRow from '../components/TrackRow'
 import SourceFilter from '../components/SourceFilter'
 import HeroVinyl from '../components/HeroVinyl'
+import CategorySection from '../components/CategorySection'
 import { applySourceFilter, usePlayer } from '../context/PlayerContext'
 import { useReveal } from '../hooks/useReveal'
 
@@ -18,10 +20,29 @@ const GENRES = [
   { label: 'Latin',     query: 'latin',             hue: 15 },
   { label: 'Bollywood', query: 'bollywood new song',hue: 350 },
   { label: 'Punjabi',   query: 'punjabi new song',  hue: 25 },
+  { label: 'Tamil',     query: 'tamil song',        hue: 10 },
+  { label: 'Telugu',    query: 'telugu song',       hue: 60 },
   { label: 'R&B',       query: 'r&b soul',          hue: 270 },
   { label: 'Workout',   query: 'workout pump',      hue: 350 },
   { label: 'Chill',     query: 'chill ambient',     hue: 200 },
   { label: 'Throwback', query: '80s 90s greatest',  hue: 130 },
+]
+
+// Order matters — lazy sections load as user scrolls
+const CATEGORY_ORDER = [
+  'globalPop',
+  'bollywood',
+  'punjabi',
+  'southIndia',
+  'hipHop',
+  'kpop',
+  'electronic',
+  'classics',
+  'oldIsGoldIndia',
+  'latin',
+  'indieAlt',
+  'marathiBengali',
+  'lofi',
 ]
 
 export default function Home() {
@@ -38,6 +59,7 @@ export default function Home() {
   useEffect(() => {
     let alive = true
     setLoading(true)
+    // Eager-load only the high-priority feeds; the rest lazy-load on scroll
     Promise.all([
       getTrendingAudius(20),
       getTrendingITunes(),
@@ -90,19 +112,13 @@ export default function Home() {
         </div>
       </header>
 
-      <RevealSection
-        title="🌍 New releases — Global"
-        subtitle="Live from major label YouTube channels"
-      >
+      <RevealSection title="🌍 Fresh from global pop" subtitle="Live from major artist YouTube channels">
         {loading && globalReleases.length === 0 ? <Skeleton /> : (
           <CardRow tracks={filteredGlobal} onPlay={(t) => playTrack(t, filteredGlobal)} />
         )}
       </RevealSection>
 
-      <RevealSection
-        title="🇮🇳 New releases — India"
-        subtitle="T-Series, Sony India, Saregama, YRF, Tips, Times, Speed and more"
-      >
+      <RevealSection title="🇮🇳 Fresh from India" subtitle="T-Series, Sony India, Saregama, Bollywood, Punjabi & more">
         {loading && indianReleases.length === 0 ? <Skeleton /> : (
           <CardRow tracks={filteredIndian} onPlay={(t) => playTrack(t, filteredIndian)} />
         )}
@@ -134,6 +150,20 @@ export default function Home() {
           <CardRow tracks={filteredRecent.slice(0, 10)} onPlay={(t) => playTrack(t, filteredRecent)} />
         </RevealSection>
       )}
+
+      {/* Lazy-loaded category sections, in order */}
+      {CATEGORY_ORDER.map((key) => {
+        const cat = CATEGORIES[key]
+        if (!cat) return null
+        return (
+          <CategorySection
+            key={key}
+            categoryKey={key}
+            title={cat.title}
+            subtitle={`${cat.channels.length} channels`}
+          />
+        )
+      })}
 
       <RevealSection title="Trending on Audius" subtitle="Full-length tracks · indie & decentralized">
         {loading ? <Skeleton /> : <CardRow tracks={filteredTrending} onPlay={(t) => playTrack(t, filteredTrending)} />}

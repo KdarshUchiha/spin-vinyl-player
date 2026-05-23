@@ -1,4 +1,4 @@
-import { GLOBAL_LABELS, INDIAN_LABELS } from './yt-channels'
+import { CATEGORIES, GLOBAL_LABELS, INDIAN_LABELS } from './yt-channels'
 
 // CORS proxies — public, free, best-effort. We try them in order.
 const CORS_PROXIES = [
@@ -130,6 +130,13 @@ export async function fetchGlobalNewReleases(limit = 24) {
 
 export async function fetchIndianNewReleases(limit = 24) {
   const all = await fetchManyChannels(INDIAN_LABELS)
+  return all.slice(0, limit)
+}
+
+export async function fetchCategoryReleases(categoryKey, limit = 14) {
+  const cat = CATEGORIES[categoryKey]
+  if (!cat) return []
+  const all = await fetchManyChannels(cat.channels)
   return all.slice(0, limit)
 }
 
