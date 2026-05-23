@@ -7,6 +7,8 @@ const STORAGE_KEYS = {
   playlists: 'vp_playlists',
   recent: 'vp_recent',
   volume: 'vp_volume',
+  source: 'vp_source',
+  plays: 'vp_plays',
 }
 
 function loadJSON(key, fallback) {
@@ -34,15 +36,34 @@ export function PlayerProvider({ children }) {
   const [volume, setVolume] = useState(() => loadJSON(STORAGE_KEYS.volume, 0.8))
   const [shuffle, setShuffle] = useState(false)
   const [repeat, setRepeat] = useState('off') // off | all | one
+  const [speed, setSpeed] = useState(1)
   const [favorites, setFavorites] = useState(() => loadJSON(STORAGE_KEYS.favorites, []))
   const [playlists, setPlaylists] = useState(() => loadJSON(STORAGE_KEYS.playlists, []))
   const [recent, setRecent] = useState(() => loadJSON(STORAGE_KEYS.recent, []))
+  const [sourceFilter, setSourceFilter] = useState(() => loadJSON(STORAGE_KEYS.source, 'all')) // all | preview | full
+  const [playCounts, setPlayCounts] = useState(() => loadJSON(STORAGE_KEYS.plays, {}))
+  const [sleepEndsAt, setSleepEndsAt] = useState(null)
 
   // persist
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.favorites, JSON.stringify(favorites)) }, [favorites])
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.playlists, JSON.stringify(playlists)) }, [playlists])
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.recent, JSON.stringify(recent)) }, [recent])
   useEffect(() => { localStorage.setItem(STORAGE_KEYS.volume, JSON.stringify(volume)) }, [volume])
+  useEffect(() => { localStorage.setItem(STORAGE_KEYS.source, JSON.stringify(sourceFilter)) }, [sourceFilter])
+  useEffect(() => { localStorage.setItem(STORAGE_KEYS.plays, JSON.stringify(playCounts)) }, [playCounts])
+
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.playbackRate = speed
+  }, [speed])
+
+  // sleep timer
+  useEffect(() => {
+    if (!sleepEndsAt) return
+    const ms = sleepEndsAt - Date.now()
+    if (ms <= 0) { audioRef.current?.pause(); setSleepEndsAt(null); return }
+    const t = setTimeout(() => { audioRef.current?.pause(); setSleepEndsAt(null) }, ms)
+    return () => clearTimeout(t)
+  }, [sleepEndsAt])
 
   // audio element wiring
   useEffect(() => {
@@ -71,6 +92,11 @@ export function PlayerProvider({ children }) {
     if (audioRef.current) audioRef.current.volume = volume
   }, [volume])
 
+  const bumpRecent = useCallback((track) => {
+    setRecent((prev) => [track, ...prev.filter((t) => t.id !== track.id)].slice(0, 50))
+    setPlayCounts((prev) => ({ ...prev, [track.id]: (prev[track.id] || 0) + 1 }))
+  }, [])
+
   const playTrack = useCallback((track, list = null) => {
     if (!track) return
     const audio = audioRef.current
@@ -84,9 +110,10 @@ export function PlayerProvider({ children }) {
     }
     setCurrentTrack(track)
     audio.src = track.preview
+    audio.playbackRate = speed
     audio.play().catch(() => {})
-    setRecent((prev) => [track, ...prev.filter((t) => t.id !== track.id)].slice(0, 30))
-  }, [])
+    bumpRecent(track)
+  }, [speed, bumpRecent])
 
   const togglePlay = useCallback(() => {
     const audio = audioRef.current
@@ -120,10 +147,11 @@ export function PlayerProvider({ children }) {
     const audio = audioRef.current
     if (audio && next) {
       audio.src = next.preview
+      audio.playbackRate = speed
       audio.play().catch(() => {})
-      setRecent((prev) => [next, ...prev.filter((t) => t.id !== next.id)].slice(0, 30))
+      bumpRecent(next)
     }
-  }, [queue, queueIndex, shuffle, repeat])
+  }, [queue, queueIndex, shuffle, repeat, speed, bumpRecent])
 
   const playPrev = useCallback(() => {
     const audio = audioRef.current
@@ -135,8 +163,9 @@ export function PlayerProvider({ children }) {
     setQueueIndex(idx)
     setCurrentTrack(prev)
     audio.src = prev.preview
+    audio.playbackRate = speed
     audio.play().catch(() => {})
-  }, [queue, queueIndex])
+  }, [queue, queueIndex, speed])
 
   const handleEnded = useCallback(() => {
     const audio = audioRef.current
@@ -148,6 +177,33 @@ export function PlayerProvider({ children }) {
     }
     playNext()
   }, [repeat, playNext])
+
+  const jumpToQueueIndex = useCallback((idx) => {
+    if (idx < 0 || idx >= queue.length) return
+    const audio = audioRef.current
+    if (!audio) return
+    const t = queue[idx]
+    setQueueIndex(idx)
+    setCurrentTrack(t)
+    audio.src = t.preview
+    audio.playbackRate = speed
+    audio.play().catch(() => {})
+    bumpRecent(t)
+  }, [queue, speed, bumpRecent])
+
+  const addToQueue = useCallback((track) => {
+    setQueue((prev) => prev.find((t) => t.id === track.id) ? prev : [...prev, track])
+  }, [])
+
+  const removeFromQueue = useCallback((idx) => {
+    setQueue((prev) => prev.filter((_, i) => i !== idx))
+    setQueueIndex((q) => idx < q ? q - 1 : q)
+  }, [])
+
+  const clearQueue = useCallback(() => {
+    setQueue(currentTrack ? [currentTrack] : [])
+    setQueueIndex(currentTrack ? 0 : -1)
+  }, [currentTrack])
 
   const toggleFavorite = useCallback((track) => {
     setFavorites((prev) =>
@@ -189,17 +245,27 @@ export function PlayerProvider({ children }) {
     )
   }, [])
 
+  const setSleepIn = useCallback((minutes) => {
+    if (!minutes) { setSleepEndsAt(null); return }
+    setSleepEndsAt(Date.now() + minutes * 60 * 1000)
+  }, [])
+
   const value = useMemo(() => ({
     currentTrack, queue, queueIndex, isPlaying, progress, duration, volume,
-    shuffle, repeat, favorites, playlists, recent,
-    playTrack, togglePlay, seek, playNext, playPrev,
-    setVolume, setShuffle, setRepeat,
+    shuffle, repeat, speed, favorites, playlists, recent,
+    sourceFilter, playCounts, sleepEndsAt,
+    playTrack, togglePlay, seek, playNext, playPrev, jumpToQueueIndex,
+    addToQueue, removeFromQueue, clearQueue,
+    setVolume, setShuffle, setRepeat, setSpeed, setSourceFilter, setSleepIn,
     toggleFavorite, isFavorite,
     createPlaylist, deletePlaylist, addToPlaylist, removeFromPlaylist,
   }), [
     currentTrack, queue, queueIndex, isPlaying, progress, duration, volume,
-    shuffle, repeat, favorites, playlists, recent,
-    playTrack, togglePlay, seek, playNext, playPrev,
+    shuffle, repeat, speed, favorites, playlists, recent,
+    sourceFilter, playCounts, sleepEndsAt,
+    playTrack, togglePlay, seek, playNext, playPrev, jumpToQueueIndex,
+    addToQueue, removeFromQueue, clearQueue,
+    setSleepIn,
     toggleFavorite, isFavorite,
     createPlaylist, deletePlaylist, addToPlaylist, removeFromPlaylist,
   ])
@@ -211,4 +277,10 @@ export function usePlayer() {
   const ctx = useContext(PlayerContext)
   if (!ctx) throw new Error('usePlayer must be used inside PlayerProvider')
   return ctx
+}
+
+export function applySourceFilter(tracks, filter) {
+  if (filter === 'preview') return tracks.filter((t) => t.source === 'itunes')
+  if (filter === 'full') return tracks.filter((t) => t.source === 'audius')
+  return tracks
 }

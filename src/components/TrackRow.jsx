@@ -1,8 +1,8 @@
-import { Heart, Play, Pause, Plus } from 'lucide-react'
+import { Heart, ListPlus, Pause, Play, Plus } from 'lucide-react'
 import { usePlayer } from '../context/PlayerContext'
 
 export default function TrackRow({ track, list, index, onAdd }) {
-  const { currentTrack, isPlaying, playTrack, togglePlay, isFavorite, toggleFavorite } = usePlayer()
+  const { currentTrack, isPlaying, playTrack, togglePlay, isFavorite, toggleFavorite, addToQueue } = usePlayer()
   const isCurrent = currentTrack?.id === track.id
   const showingPause = isCurrent && isPlaying
 
@@ -23,7 +23,17 @@ export default function TrackRow({ track, list, index, onAdd }) {
         <div className="track-row-title">{track.title}</div>
         <div className="track-row-sub">{track.artist}{track.album ? ` · ${track.album}` : ''}</div>
       </div>
-      <div className="track-row-source">{track.source === 'audius' ? 'FULL' : '0:30'}</div>
+      <div className={`track-row-source track-row-source--${track.source}`}>
+        {track.source === 'audius' ? 'FULL' : '0:30'}
+      </div>
+      <button
+        className="icon-btn"
+        onClick={() => addToQueue(track)}
+        aria-label="Add to queue"
+        title="Add to queue"
+      >
+        <ListPlus size={18} />
+      </button>
       <button
         className={`icon-btn ${isFavorite(track.id) ? 'icon-btn--active' : ''}`}
         onClick={() => toggleFavorite(track)}
@@ -32,7 +42,7 @@ export default function TrackRow({ track, list, index, onAdd }) {
         <Heart size={18} fill={isFavorite(track.id) ? 'currentColor' : 'none'} />
       </button>
       {onAdd && (
-        <button className="icon-btn" onClick={() => onAdd(track)} aria-label="Add to playlist">
+        <button className="icon-btn" onClick={() => onAdd(track)} aria-label="Add to playlist" title="Add to playlist">
           <Plus size={18} />
         </button>
       )}

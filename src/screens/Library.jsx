@@ -1,14 +1,28 @@
-import { useState } from 'react'
-import { Heart, ListMusic, Plus, Trash2, X } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Clock, Heart, ListMusic, Plus, Trash2, TrendingUp, X } from 'lucide-react'
 import { usePlayer } from '../context/PlayerContext'
 import TrackRow from '../components/TrackRow'
 
 export default function Library() {
-  const { favorites, playlists, createPlaylist, deletePlaylist, removeFromPlaylist } = usePlayer()
+  const {
+    favorites, playlists, recent, playCounts,
+    createPlaylist, deletePlaylist, removeFromPlaylist,
+  } = usePlayer()
   const [tab, setTab] = useState('favorites')
   const [openPl, setOpenPl] = useState(null)
   const [creating, setCreating] = useState(false)
   const [name, setName] = useState('')
+
+  const stats = useMemo(() => {
+    const totalPlays = Object.values(playCounts).reduce((a, b) => a + b, 0)
+    let topId = null, topCount = 0
+    for (const [id, c] of Object.entries(playCounts)) {
+      if (c > topCount) { topId = id; topCount = c }
+    }
+    const topTrack = recent.find((t) => t.id === topId) || favorites.find((t) => t.id === topId)
+    const minutesEstimate = totalPlays * 2
+    return { totalPlays, topTrack, topCount, minutesEstimate }
+  }, [playCounts, recent, favorites])
 
   if (openPl) {
     const pl = playlists.find((p) => p.id === openPl)
@@ -36,6 +50,25 @@ export default function Library() {
   return (
     <div className="screen">
       <h1 className="screen-title">Your library</h1>
+
+      <div className="stats-row">
+        <Stat label="Plays" value={stats.totalPlays} icon={<TrendingUp size={18} />} />
+        <Stat label="Listening" value={`${stats.minutesEstimate}m`} icon={<Clock size={18} />} hint="approx" />
+        <Stat label="Favorites" value={favorites.length} icon={<Heart size={18} />} />
+        <Stat label="Playlists" value={playlists.length} icon={<ListMusic size={18} />} />
+      </div>
+
+      {stats.topTrack && (
+        <div className="top-track">
+          <img src={stats.topTrack.artwork} alt="" />
+          <div>
+            <div className="top-track-label">Most played</div>
+            <div className="top-track-title">{stats.topTrack.title}</div>
+            <div className="top-track-sub">{stats.topTrack.artist} · {stats.topCount} {stats.topCount === 1 ? 'play' : 'plays'}</div>
+          </div>
+        </div>
+      )}
+
       <div className="tabs">
         <button className={`tab ${tab === 'favorites' ? 'tab--active' : ''}`} onClick={() => setTab('favorites')}>
           <Heart size={16} /> Favorites ({favorites.length})
@@ -43,12 +76,22 @@ export default function Library() {
         <button className={`tab ${tab === 'playlists' ? 'tab--active' : ''}`} onClick={() => setTab('playlists')}>
           <ListMusic size={16} /> Playlists ({playlists.length})
         </button>
+        <button className={`tab ${tab === 'recent' ? 'tab--active' : ''}`} onClick={() => setTab('recent')}>
+          <Clock size={16} /> Recent ({recent.length})
+        </button>
       </div>
 
       {tab === 'favorites' && (
         <div className="track-list">
           {favorites.map((t, i) => <TrackRow key={t.id} track={t} list={favorites} index={i} />)}
           {favorites.length === 0 && <div className="muted">Tap the heart on any track to save it here.</div>}
+        </div>
+      )}
+
+      {tab === 'recent' && (
+        <div className="track-list">
+          {recent.map((t, i) => <TrackRow key={`${t.id}-r-${i}`} track={t} list={recent} index={i} />)}
+          {recent.length === 0 && <div className="muted">Play some songs and they'll show up here.</div>}
         </div>
       )}
 
@@ -106,6 +149,18 @@ export default function Library() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function Stat({ label, value, icon, hint }) {
+  return (
+    <div className="stat">
+      <div className="stat-icon">{icon}</div>
+      <div>
+        <div className="stat-value">{value}</div>
+        <div className="stat-label">{label}{hint ? ` · ${hint}` : ''}</div>
+      </div>
     </div>
   )
 }
