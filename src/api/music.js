@@ -23,9 +23,9 @@ function upsizeItunesArt(url, size = 600) {
   return url.replace(/\/\d+x\d+bb\.(jpg|png)$/, `/${size}x${size}bb.$1`)
 }
 
-export async function searchITunes(query, limit = 25) {
+export async function searchITunes(query, limit = 25, offset = 0) {
   if (!query) return []
-  const url = `${ITUNES_BASE}?term=${encodeURIComponent(query)}&media=music&entity=song&limit=${limit}`
+  const url = `${ITUNES_BASE}?term=${encodeURIComponent(query)}&media=music&entity=song&limit=${limit}&offset=${offset}`
   const res = await fetch(url)
   if (!res.ok) throw new Error('iTunes search failed')
   const json = await res.json()
@@ -62,10 +62,10 @@ export async function searchAudius(query, limit = 25) {
   }))
 }
 
-export async function searchAll(query) {
+export async function searchAll(query, offset = 0) {
   const [a, b] = await Promise.allSettled([
-    searchITunes(query, 20),
-    searchAudius(query, 15),
+    searchITunes(query, 20, offset),
+    offset === 0 ? searchAudius(query, 15) : Promise.resolve([]),
   ])
   const arr = []
   if (a.status === 'fulfilled') arr.push(...a.value)

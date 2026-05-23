@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Search as SearchIcon, X } from 'lucide-react'
 import { searchAll } from '../api/music'
 import TrackRow from '../components/TrackRow'
@@ -7,22 +7,62 @@ import EmptyState from '../components/EmptyState'
 import { applySourceFilter, usePlayer } from '../context/PlayerContext'
 
 const SUGGESTIONS = ['The Weeknd', 'Tame Impala', 'lofi study', 'Bad Bunny', 'Dua Lipa', 'house mix', 'Adele']
+const PAGE_SIZE = 20
 
 export default function Search({ onAdd }) {
   const [q, setQ] = useState('')
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(false)
+  const [offset, setOffset] = useState(0)
+  const sentinelRef = useRef(null)
+  const seenIds = useRef(new Set())
   const { sourceFilter } = usePlayer()
 
+  // initial search (debounced)
   useEffect(() => {
-    if (!q.trim()) { setResults([]); return }
+    if (!q.trim()) {
+      setResults([]); setHasMore(false); setOffset(0); seenIds.current = new Set()
+      return
+    }
     let alive = true
     setLoading(true)
+    seenIds.current = new Set()
     const t = setTimeout(() => {
-      searchAll(q).then((r) => { if (alive) { setResults(r); setLoading(false) } })
+      searchAll(q, 0).then((r) => {
+        if (!alive) return
+        r.forEach((t) => seenIds.current.add(t.id))
+        setResults(r)
+        setOffset(r.filter((t) => t.source === 'itunes').length)
+        setHasMore(r.length >= PAGE_SIZE)
+        setLoading(false)
+      })
     }, 300)
     return () => { alive = false; clearTimeout(t) }
   }, [q])
+
+  // pagination via IntersectionObserver
+  useEffect(() => {
+    if (!hasMore || loading || loadingMore || !q.trim()) return
+    const el = sentinelRef.current
+    if (!el) return
+    const obs = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) {
+        setLoadingMore(true)
+        searchAll(q, offset).then((more) => {
+          const fresh = more.filter((t) => !seenIds.current.has(t.id))
+          fresh.forEach((t) => seenIds.current.add(t.id))
+          setResults((prev) => [...prev, ...fresh])
+          setOffset((prev) => prev + fresh.filter((t) => t.source === 'itunes').length)
+          setHasMore(fresh.length > 0)
+          setLoadingMore(false)
+        })
+      }
+    }, { threshold: 0.1 })
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [hasMore, loading, loadingMore, q, offset])
 
   const filtered = useMemo(() => applySourceFilter(results, sourceFilter), [results, sourceFilter])
   const previewCount = results.filter((r) => r.source === 'itunes').length
@@ -64,6 +104,12 @@ export default function Search({ onAdd }) {
           <TrackRow key={t.id} track={t} list={filtered} index={i} onAdd={onAdd} />
         ))}
       </div>
+
+      {hasMore && q && !loading && (
+        <div ref={sentinelRef} className="infinite-sentinel">
+          {loadingMore ? 'Loading more…' : ''}
+        </div>
+      )}
 
       {!q && (
         <EmptyState

@@ -1,8 +1,18 @@
-import { ListMusic, Trash2, X } from 'lucide-react'
+import { useState } from 'react'
+import { GripVertical, ListMusic, Trash2, X } from 'lucide-react'
 import { usePlayer } from '../context/PlayerContext'
 
 export default function QueuePanel({ open, onClose }) {
-  const { queue, queueIndex, jumpToQueueIndex, removeFromQueue, clearQueue, currentTrack } = usePlayer()
+  const { queue, queueIndex, jumpToQueueIndex, removeFromQueue, clearQueue, currentTrack, reorderQueue } = usePlayer()
+  const [dragFrom, setDragFrom] = useState(null)
+  const [dragOver, setDragOver] = useState(null)
+
+  const onDrop = (to) => {
+    if (dragFrom != null && to != null && dragFrom !== to) {
+      reorderQueue(dragFrom, to)
+    }
+    setDragFrom(null); setDragOver(null)
+  }
 
   return (
     <>
@@ -37,7 +47,7 @@ export default function QueuePanel({ open, onClose }) {
           <div className="queue-label">Up next</div>
           {queue.slice(queueIndex + 1).length === 0 && (
             <div className="muted" style={{ padding: '8px 4px' }}>
-              Add songs from anywhere using the <ListMusic size={14} style={{ display: 'inline', verticalAlign: 'middle' }} /> button.
+              Add songs from anywhere with the queue button.
             </div>
           )}
           {queue.slice(queueIndex + 1).map((t, i) => {
@@ -46,6 +56,12 @@ export default function QueuePanel({ open, onClose }) {
               <QueueRow
                 key={`${t.id}-${realIdx}`}
                 track={t}
+                draggable
+                isDragOver={dragOver === realIdx}
+                onDragStart={() => setDragFrom(realIdx)}
+                onDragOver={(e) => { e.preventDefault(); setDragOver(realIdx) }}
+                onDragEnd={() => { setDragFrom(null); setDragOver(null) }}
+                onDrop={() => onDrop(realIdx)}
                 onPlay={() => jumpToQueueIndex(realIdx)}
                 onRemove={() => removeFromQueue(realIdx)}
               />
@@ -71,9 +87,21 @@ export default function QueuePanel({ open, onClose }) {
   )
 }
 
-function QueueRow({ track, active, dim, onPlay, onRemove }) {
+function QueueRow({ track, active, dim, draggable, isDragOver, onDragStart, onDragOver, onDragEnd, onDrop, onPlay, onRemove }) {
   return (
-    <div className={`queue-row ${active ? 'queue-row--active' : ''} ${dim ? 'queue-row--dim' : ''}`}>
+    <div
+      className={`queue-row ${active ? 'queue-row--active' : ''} ${dim ? 'queue-row--dim' : ''} ${isDragOver ? 'queue-row--drag-over' : ''}`}
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDragEnd={onDragEnd}
+      onDrop={onDrop}
+    >
+      {draggable && (
+        <span className="queue-grip" aria-hidden="true">
+          <GripVertical size={16} />
+        </span>
+      )}
       <button className="queue-row-main" onClick={onPlay} disabled={active}>
         <img src={track.artwork} alt="" />
         <div className="queue-row-meta">

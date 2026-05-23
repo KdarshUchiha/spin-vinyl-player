@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import {
-  ChevronDown, Gauge, Heart, ListMusic, Moon, Pause, Play,
-  Repeat, Repeat1, Shuffle, SkipBack, SkipForward, Volume2,
+  ChevronDown, Disc3, Gauge, Heart, ListMusic, Mic2, Moon, Pause, Play,
+  Repeat, Repeat1, Share2, Shuffle, SkipBack, SkipForward, Sliders, Volume2,
 } from 'lucide-react'
 import { usePlayer } from '../context/PlayerContext'
 import Vinyl from '../components/Vinyl'
 import Visualizer from '../components/Visualizer'
 import QueuePanel from '../components/QueuePanel'
+import Lyrics from '../components/Lyrics'
+import { shareTrack, useToast } from '../components/Toast'
 
 function fmt(s) {
   if (!s || !isFinite(s)) return '0:00'
@@ -22,7 +24,13 @@ const SLEEP_OPTIONS = [
   { label: '15 min', mins: 15 },
   { label: '30 min', mins: 30 },
   { label: '60 min', mins: 60 },
-  { label: 'End of track', mins: -1 },
+]
+const EQ_OPTIONS = [
+  { key: 'off', label: 'Off' },
+  { key: 'bass', label: 'Bass Boost' },
+  { key: 'vocal', label: 'Vocal' },
+  { key: 'treble', label: 'Treble' },
+  { key: 'lounge', label: 'Lounge' },
 ]
 
 export default function NowPlaying({ onClose }) {
@@ -31,11 +39,14 @@ export default function NowPlaying({ onClose }) {
     togglePlay, playNext, playPrev, seek,
     volume, setVolume, shuffle, setShuffle, repeat, setRepeat,
     speed, setSpeed, sleepEndsAt, setSleepIn,
+    eqPreset, setEqPreset,
     isFavorite, toggleFavorite,
   } = usePlayer()
+  const toast = useToast()
 
-  const [openMenu, setOpenMenu] = useState(null) // 'speed' | 'sleep' | null
+  const [openMenu, setOpenMenu] = useState(null)
   const [queueOpen, setQueueOpen] = useState(false)
+  const [view, setView] = useState('vinyl') // 'vinyl' | 'lyrics'
   const [vinylSize, setVinylSize] = useState(320)
 
   useEffect(() => {
@@ -69,6 +80,14 @@ export default function NowPlaying({ onClose }) {
           </div>
           <div className="np-header-right">
             <button
+              className="icon-btn"
+              onClick={() => shareTrack(currentTrack, toast)}
+              aria-label="Share"
+              title="Share"
+            >
+              <Share2 size={20} />
+            </button>
+            <button
               className={`icon-btn ${isFavorite(currentTrack.id) ? 'icon-btn--active' : ''}`}
               onClick={() => toggleFavorite(currentTrack)}
               aria-label="Favorite"
@@ -78,9 +97,26 @@ export default function NowPlaying({ onClose }) {
           </div>
         </header>
 
-        <div className="np-vinyl-wrap">
-          <Vinyl size={vinylSize} />
+        <div className="np-view-toggle">
+          <button
+            className={`np-view-btn ${view === 'vinyl' ? 'np-view-btn--active' : ''}`}
+            onClick={() => setView('vinyl')}
+          ><Disc3 size={14} /> Vinyl</button>
+          <button
+            className={`np-view-btn ${view === 'lyrics' ? 'np-view-btn--active' : ''}`}
+            onClick={() => setView('lyrics')}
+          ><Mic2 size={14} /> Lyrics</button>
         </div>
+
+        {view === 'vinyl' ? (
+          <div className="np-vinyl-wrap">
+            <Vinyl size={vinylSize} />
+          </div>
+        ) : (
+          <div className="np-lyrics-wrap">
+            <Lyrics />
+          </div>
+        )}
 
         <div className="np-meta">
           <div className="np-title">{currentTrack.title}</div>
@@ -150,11 +186,21 @@ export default function NowPlaying({ onClose }) {
               onClick={() => setOpenMenu(openMenu === 'speed' ? null : 'speed')}
             >
               {SPEEDS.map((s) => (
-                <button
-                  key={s}
-                  className={`pop-item ${speed === s ? 'pop-item--active' : ''}`}
-                  onClick={() => { setSpeed(s); setOpenMenu(null) }}
-                >{s}x</button>
+                <button key={s} className={`pop-item ${speed === s ? 'pop-item--active' : ''}`}
+                  onClick={() => { setSpeed(s); setOpenMenu(null) }}>{s}x</button>
+              ))}
+            </Pop>
+
+            <Pop
+              label={EQ_OPTIONS.find((o) => o.key === eqPreset)?.label || 'EQ'}
+              icon={<Sliders size={16} />}
+              active={eqPreset !== 'off'}
+              open={openMenu === 'eq'}
+              onClick={() => setOpenMenu(openMenu === 'eq' ? null : 'eq')}
+            >
+              {EQ_OPTIONS.map((o) => (
+                <button key={o.key} className={`pop-item ${eqPreset === o.key ? 'pop-item--active' : ''}`}
+                  onClick={() => { setEqPreset(o.key); setOpenMenu(null) }}>{o.label}</button>
               ))}
             </Pop>
 
@@ -166,11 +212,8 @@ export default function NowPlaying({ onClose }) {
               onClick={() => setOpenMenu(openMenu === 'sleep' ? null : 'sleep')}
             >
               {SLEEP_OPTIONS.map((o) => (
-                <button
-                  key={o.label}
-                  className={`pop-item ${(o.mins === 0 && !sleepEndsAt) ? 'pop-item--active' : ''}`}
-                  onClick={() => { setSleepIn(o.mins > 0 ? o.mins : 0); setOpenMenu(null) }}
-                >{o.label}</button>
+                <button key={o.label} className={`pop-item ${(o.mins === 0 && !sleepEndsAt) ? 'pop-item--active' : ''}`}
+                  onClick={() => { setSleepIn(o.mins > 0 ? o.mins : 0); setOpenMenu(null) }}>{o.label}</button>
               ))}
             </Pop>
 

@@ -1,8 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Home as HomeIcon, Library, Search as SearchIcon, X } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { PlayerProvider, usePlayer } from './context/PlayerContext'
 import { useArtworkPalette } from './hooks/useArtworkPalette'
+import { useMediaSession } from './hooks/useMediaSession'
+import { useHotkeys } from './hooks/useHotkeys'
+import { ToastProvider } from './components/Toast'
 import Home from './screens/Home'
 import Search from './screens/Search'
 import LibraryScreen from './screens/Library'
@@ -14,7 +17,9 @@ function Shell() {
   const [route, setRoute] = useState('home')
   const [npOpen, setNpOpen] = useState(false)
   const [addingTrack, setAddingTrack] = useState(null)
-  const { playlists, addToPlaylist, currentTrack } = usePlayer()
+  const player = usePlayer()
+  const { playlists, addToPlaylist, currentTrack, isPlaying, progress, duration,
+    togglePlay, playNext, playPrev, seek, toggleFavorite, setShuffle, shuffle, setRepeat, repeat, setVolume, volume } = player
   const palette = useArtworkPalette(currentTrack?.artwork)
 
   useEffect(() => {
@@ -23,6 +28,34 @@ function Shell() {
     root.style.setProperty('--theme-secondary', palette.secondary)
     root.style.setProperty('--theme-dark', palette.dark)
   }, [palette])
+
+  useMediaSession({
+    track: currentTrack,
+    isPlaying, progress, duration,
+    onPlay: () => togglePlay(),
+    onPause: () => togglePlay(),
+    onNext: playNext,
+    onPrev: playPrev,
+    onSeek: seek,
+  })
+
+  const hotkeys = useMemo(() => ({
+    ' ': () => togglePlay(),
+    ArrowLeft: () => seek(Math.max(0, progress - 5)),
+    ArrowRight: () => seek(Math.min(duration || progress + 5, progress + 5)),
+    ArrowUp: () => setVolume(Math.min(1, volume + 0.05)),
+    ArrowDown: () => setVolume(Math.max(0, volume - 0.05)),
+    j: () => playPrev(),
+    k: () => playNext(),
+    f: () => currentTrack && toggleFavorite(currentTrack),
+    s: () => setShuffle(!shuffle),
+    r: () => setRepeat(repeat === 'off' ? 'all' : repeat === 'all' ? 'one' : 'off'),
+    n: () => setNpOpen((v) => !v),
+    '/': () => setRoute('search'),
+    Escape: () => setNpOpen(false),
+    escape: () => setNpOpen(false),
+  }), [togglePlay, seek, progress, duration, volume, setVolume, playPrev, playNext, currentTrack, toggleFavorite, shuffle, setShuffle, repeat, setRepeat])
+  useHotkeys(hotkeys)
 
   return (
     <div className="app">
@@ -37,7 +70,7 @@ function Shell() {
           <NavBtn icon={<Library size={20} />} active={route === 'library'} onClick={() => setRoute('library')}>Library</NavBtn>
         </nav>
         <div className="sidebar-footer">
-          <small>Free preview · iTunes & Audius</small>
+          <small>Press <kbd>?</kbd> for shortcuts</small>
         </div>
       </aside>
 
@@ -120,8 +153,10 @@ function BottomBtn({ icon, active, onClick, children }) {
 
 export default function App() {
   return (
-    <PlayerProvider>
-      <Shell />
-    </PlayerProvider>
+    <ToastProvider>
+      <PlayerProvider>
+        <Shell />
+      </PlayerProvider>
+    </ToastProvider>
   )
 }
