@@ -90,8 +90,12 @@ img { display: block; }
   font-weight: 900; letter-spacing: -0.04em;
 }
 .hero-accent {
-  background: linear-gradient(120deg, var(--accent) 0%, var(--accent-2) 100%);
-  -webkit-background-clip: text; background-clip: text; color: transparent;
+  background-image: linear-gradient(120deg, var(--accent) 0%, var(--accent-2) 100%);
+  background-color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
   font-style: italic;
 }
 .screen-hero p { color: var(--ink-2); margin: 12px 0 0; font-size: 18px; }
@@ -961,8 +965,12 @@ button:focus-visible, input:focus-visible, .card:focus-visible, .playlist-card:f
   box-shadow: 0 0 0 2px #2a1240, 0 4px 16px var(--theme-primary) !important;
 }
 .hero-accent {
-  background: linear-gradient(120deg, var(--theme-primary) 0%, var(--theme-secondary) 100%) !important;
-  -webkit-background-clip: text; background-clip: text; color: transparent;
+  background-image: linear-gradient(120deg, var(--theme-primary) 0%, var(--theme-secondary) 100%);
+  background-color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
 }
 .viz-bar { background: linear-gradient(180deg, var(--theme-primary), var(--theme-secondary)); }
 .mini-progress { background: linear-gradient(90deg, var(--theme-primary), var(--theme-secondary)); }
